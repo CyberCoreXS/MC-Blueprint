@@ -1,249 +1,285 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Upload, ZoomIn, ZoomOut, Grid, Settings2, Image as ImageIcon, Download } from 'lucide-react';
-
-export default function App() {
-  // --- State สำหรับเก็บค่าต่างๆ ---
-  const [image, setImage] = useState(null); // เก็บรูปภาพที่อัปโหลด
-  const [gridSize, setGridSize] = useState(1); // ขนาดของ 1 ช่อง (1 pixel = 1 block เริ่มต้น)
-  const [zoom, setZoom] = useState(20); // ระดับการซูมเริ่มต้น (ซูมเยอะๆ เพราะภาพ pixel art มักจะเล็ก)
-  const [showGrid, setShowGrid] = useState(true); // เปิด/ปิด ตาราง
-  const [gridColor, setGridColor] = useState('rgba(255, 0, 0, 0.5)'); // สีของเส้นตาราง
-  const [imageInfo, setImageInfo] = useState({ width: 0, height: 0 }); // เก็บขนาดภาพต้นฉบับ
-
-  const canvasRef = useRef(null);
-  const fileInputRef = useRef(null);
-
-  // --- ฟังก์ชันจัดการการอัปโหลดรูปภาพ ---
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          setImage(img);
-          setImageInfo({ width: img.width, height: img.height });
-          // ปรับ Zoom อัตโนมัติให้พอดีจอคร่าวๆ
-          if (img.width > 100) setZoom(5);
-          else setZoom(20);
-        };
-        img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // --- ฟังก์ชันหลักสำหรับวาดรูปและตารางลงบน Canvas ---
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !image) return;
-
-    const ctx = canvas.getContext('2d');
-
-    // คำนวณขนาดที่ต้องแสดงผลตาม Zoom
-    const drawWidth = image.width * zoom;
-    const drawHeight = image.height * zoom;
-
-    // ตั้งค่าขนาด Canvas
-    canvas.width = drawWidth;
-    canvas.height = drawHeight;
-
-    // เคลียร์หน้าจอ
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // *** หัวใจสำคัญ: ปิดการเบลอภาพ (Anti-aliasing) เพื่อให้ Pixel Art คมชัดเวลาซูม ***
-    ctx.imageSmoothingEnabled = false;
-
-    // วาดรูปภาพต้นฉบับ
-    ctx.drawImage(image, 0, 0, drawWidth, drawHeight);
-
-    // วาดเส้นตาราง (Grid)
-    if (showGrid && gridSize > 0) {
-      ctx.strokeStyle = gridColor;
-      // ปรับความหนาของเส้นตามระดับการซูม (ถ้าซูมน้อยเส้นจะบางลง)
-      ctx.lineWidth = zoom > 10 ? 1 : 0.5;
-
-      // ระยะห่างของเส้นตาราง (คำนวณจาก ขนาด Grid ต้นฉบับ x ระดับการซูม)
-      const step = gridSize * zoom;
-
-      ctx.beginPath();
-      
-      // วาดเส้นแนวตั้ง
-      for (let x = 0; x <= drawWidth; x += step) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, drawHeight);
-      }
-      
-      // วาดเส้นแนวนอน
-      for (let y = 0; y <= drawHeight; y += step) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(drawWidth, y);
-      }
-      
-      ctx.stroke();
-    }
-  }, [image, gridSize, zoom, showGrid, gridColor]);
-
-  return (
-    <div className="min-h-screen bg-neutral-900 text-neutral-200 font-sans flex flex-col md:flex-row selection:bg-green-500 selection:text-white">
-      
-      {/* แถบเครื่องมือด้านซ้าย (Sidebar) */}
-      <div className="w-full md:w-80 bg-neutral-800 p-6 flex flex-col gap-6 shadow-2xl border-r border-neutral-700 z-10 shrink-0">
-        <div>
-          <h1 className="text-2xl font-bold text-green-400 flex items-center gap-2">
-            <Grid className="w-6 h-6" />
-            MC Blueprint
-          </h1>
-          <p className="text-sm text-neutral-400 mt-1">แปลงภาพ Pixel Art เป็นแปลนสร้าง Minecraft</p>
-        </div>
-
-        {/* 1. ส่วนอัปโหลด */}
-        <div className="bg-neutral-700/50 p-4 rounded-xl border border-neutral-600">
-          <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-            <Upload className="w-4 h-4 text-green-400" />
-            1. อัปโหลดภาพ (แนะนำ Pixel Art)
-          </label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            ref={fileInputRef}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current.click()}
-            className="w-full bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            <ImageIcon className="w-4 h-4" /> เลือกรูปภาพ
-          </button>
-          
-          {image && (
-            <div className="mt-3 text-xs text-neutral-400 flex justify-between">
-              <span>ขนาดต้นฉบับ:</span>
-              <span className="font-mono text-green-300">{imageInfo.width} x {imageInfo.height} px</span>
-            </div>
-          )}
-        </div>
-
-        {/* 2. ส่วนควบคุม Grid และ Scale */}
-        <div className="bg-neutral-700/50 p-4 rounded-xl border border-neutral-600 flex flex-col gap-4">
-          <label className="block text-sm font-medium flex items-center gap-2">
-            <Settings2 className="w-4 h-4 text-green-400" />
-            2. ตั้งค่าการแสดงผล
-          </label>
-
-          {/* ซูมภาพ */}
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span>ซูมขยายภาพ</span>
-              <span className="font-mono">{zoom}x</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <ZoomOut className="w-4 h-4 text-neutral-400" />
-              <input
-                type="range"
-                min="1"
-                max="50"
-                value={zoom}
-                onChange={(e) => setZoom(Number(e.target.value))}
-                className="w-full accent-green-500"
-              />
-              <ZoomIn className="w-4 h-4 text-neutral-400" />
-            </div>
-          </div>
-
-          {/* ขนาด Grid */}
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span>ขนาด 1 ช่อง (Pixel ต่อ 1 Block)</span>
-              <span className="font-mono">{gridSize} px</span>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="16"
-              step="1"
-              value={gridSize}
-              onChange={(e) => setGridSize(Number(e.target.value))}
-              className="w-full accent-blue-500"
-            />
-            <p className="text-[10px] text-neutral-400 mt-1 leading-tight">
-              * สำหรับภาพ Pixel Art ทั่วไป ปรับเป็น "1" (1 พิกเซล = 1 บล็อก)
-            </p>
-          </div>
-
-          {/* ปรับสีเส้นตาราง */}
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span>สีของตาราง</span>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setGridColor('rgba(255, 0, 0, 0.6)')} className="w-6 h-6 rounded-full bg-red-500 border-2 border-transparent focus:border-white"></button>
-              <button onClick={() => setGridColor('rgba(0, 255, 0, 0.6)')} className="w-6 h-6 rounded-full bg-green-500 border-2 border-transparent focus:border-white"></button>
-              <button onClick={() => setGridColor('rgba(0, 150, 255, 0.6)')} className="w-6 h-6 rounded-full bg-blue-500 border-2 border-transparent focus:border-white"></button>
-              <button onClick={() => setGridColor('rgba(255, 255, 255, 0.6)')} className="w-6 h-6 rounded-full bg-white border-2 border-neutral-400 focus:border-green-500"></button>
-              <button onClick={() => setGridColor('rgba(0, 0, 0, 0.6)')} className="w-6 h-6 rounded-full bg-black border-2 border-neutral-600 focus:border-white"></button>
-            </div>
-          </div>
-
-          {/* เปิด/ปิด Grid */}
-          <label className="flex items-center gap-2 cursor-pointer mt-2">
-            <input
-              type="checkbox"
-              checked={showGrid}
-              onChange={(e) => setShowGrid(e.target.checked)}
-              className="w-4 h-4 rounded text-green-500 bg-neutral-800 border-neutral-600 focus:ring-green-500 focus:ring-offset-neutral-800"
-            />
-            <span className="text-sm">แสดงเส้นตาราง</span>
-          </label>
-        </div>
-
-        {/* สรุปข้อมูล */}
-        {image && (
-           <div className="bg-neutral-800 p-4 border border-green-500/30 rounded-xl mt-auto">
-             <p className="text-xs text-neutral-400 mb-1">ถ้าสร้างในเกม คุณจะต้องใช้พื้นที่:</p>
-             <p className="text-sm font-bold text-green-400">
-               กว้าง {Math.ceil(imageInfo.width / gridSize)} บล็อก
-             </p>
-             <p className="text-sm font-bold text-green-400">
-               สูง {Math.ceil(imageInfo.height / gridSize)} บล็อก
-             </p>
-           </div>
-        )}
-      </div>
-
-      {/* พื้นที่แสดงผล (Canvas Workspace) */}
-      <div className="flex-1 bg-neutral-900 overflow-auto relative flex items-center justify-center p-8 pattern-checkered">
-        {/* CSS Pattern สำหรับพื้นหลังเวลาภาพโปร่งใส */}
-        <style dangerouslySetInnerHTML={{__html: `
-          .pattern-checkered {
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MC Blueprint Maker</title>
+    <!-- นำเข้า Tailwind CSS ผ่าน CDN สำหรับการจัดการหน้าตาเว็บอย่างรวดเร็ว -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- นำเข้า Feather Icons สำหรับไอคอนสวยๆ -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <style>
+        /* สร้างลวดลายตารางหมากรุกสำหรับพื้นหลังเวลาภาพมีส่วนโปร่งใส */
+        .pattern-checkered {
             background-color: #171717;
-            background-image: linear-gradient(45deg, #262626 25%, transparent 25%, transparent 75%, #262626 75%, #262626), linear-gradient(45deg, #262626 25%, transparent 25%, transparent 75%, #262626 75%, #262626);
+            background-image: linear-gradient(45deg, #262626 25%, transparent 25%, transparent 75%, #262626 75%, #262626), 
+                              linear-gradient(45deg, #262626 25%, transparent 25%, transparent 75%, #262626 75%, #262626);
             background-size: 20px 20px;
             background-position: 0 0, 10px 10px;
-          }
-        `}} />
+        }
+        /* บังคับไม่ให้เบราว์เซอร์เบลอภาพเวลาซูม */
+        #main-canvas {
+            image-rendering: pixelated;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-neutral-900 text-neutral-200 font-sans flex flex-col md:flex-row selection:bg-green-500 selection:text-white">
 
-        {image ? (
-          <div className="shadow-2xl border border-neutral-700 bg-black/50 overflow-hidden relative">
-             <canvas 
-                ref={canvasRef} 
-                className="block cursor-crosshair"
-                style={{
-                  // ให้แสดงผลแบบไม่เบลอในฝั่ง CSS ด้วย เพื่อความชัวร์
-                  imageRendering: 'pixelated'
-                }}
-             />
-          </div>
-        ) : (
-          <div className="text-center text-neutral-500 flex flex-col items-center">
-            <ImageIcon className="w-16 h-16 mb-4 opacity-50" />
-            <p className="text-lg font-medium">รอรูปภาพของคุณอยู่</p>
-            <p className="text-sm">กดปุ่ม "เลือกรูปภาพ" ด้านซ้ายเพื่อเริ่มต้น</p>
-          </div>
-        )}
-      </div>
+    <!-- แถบเครื่องมือด้านซ้าย (Sidebar) -->
+    <div class="w-full md:w-80 bg-neutral-800 p-6 flex flex-col gap-6 shadow-2xl border-r border-neutral-700 z-10 shrink-0 overflow-y-auto max-h-screen">
+        <div>
+            <h1 class="text-2xl font-bold text-green-400 flex items-center gap-2">
+                <i data-feather="grid" class="w-6 h-6"></i>
+                MC Blueprint
+            </h1>
+            <p class="text-sm text-neutral-400 mt-1">แปลงภาพ Pixel Art เป็นแปลนสร้าง Minecraft</p>
+        </div>
 
+        <!-- 1. ส่วนอัปโหลด -->
+        <div class="bg-neutral-700/50 p-4 rounded-xl border border-neutral-600">
+            <label class="block text-sm font-medium mb-2 flex items-center gap-2">
+                <i data-feather="upload" class="w-4 h-4 text-green-400"></i>
+                1. อัปโหลดภาพ (แนะนำ Pixel Art)
+            </label>
+            <input type="file" id="file-upload" accept="image/*" class="hidden" />
+            <button onclick="document.getElementById('file-upload').click()" class="w-full bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+                <i data-feather="image" class="w-4 h-4"></i> เลือกรูปภาพ
+            </button>
+            
+            <div id="image-info-container" class="mt-3 text-xs text-neutral-400 flex justify-between hidden">
+                <span>ขนาดต้นฉบับ:</span>
+                <span id="orig-size" class="font-mono text-green-300">0 x 0 px</span>
+            </div>
+        </div>
+
+        <!-- 2. ส่วนควบคุม Grid และ Scale -->
+        <div class="bg-neutral-700/50 p-4 rounded-xl border border-neutral-600 flex flex-col gap-4">
+            <label class="block text-sm font-medium flex items-center gap-2">
+                <i data-feather="settings" class="w-4 h-4 text-green-400"></i>
+                2. ตั้งค่าการแสดงผล
+            </label>
+
+            <!-- ซูมภาพ -->
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <span>ซูมขยายภาพ</span>
+                    <span id="zoom-val" class="font-mono">20x</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i data-feather="zoom-out" class="w-4 h-4 text-neutral-400"></i>
+                    <input type="range" id="zoom-range" min="1" max="50" value="20" class="w-full accent-green-500" />
+                    <i data-feather="zoom-in" class="w-4 h-4 text-neutral-400"></i>
+                </div>
+            </div>
+
+            <!-- ขนาด Grid -->
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <span>ขนาด 1 ช่อง (Pixel = Block)</span>
+                    <span id="grid-val" class="font-mono">1 px</span>
+                </div>
+                <input type="range" id="grid-range" min="1" max="16" step="1" value="1" class="w-full accent-blue-500" />
+                <p class="text-[10px] text-neutral-400 mt-1 leading-tight">
+                    * สำหรับภาพ Pixel Art ทั่วไป ปรับเป็น "1"
+                </p>
+            </div>
+
+            <!-- ปรับสีเส้นตาราง -->
+            <div>
+                <div class="flex justify-between text-xs mb-1">
+                    <span>สีของตาราง</span>
+                </div>
+                <div class="flex gap-2" id="color-buttons">
+                    <button data-color="rgba(255, 0, 0, 0.6)" class="color-btn w-6 h-6 rounded-full bg-red-500 border-2 border-transparent focus:border-white ring-2 ring-white ring-offset-2 ring-offset-neutral-800"></button>
+                    <button data-color="rgba(0, 255, 0, 0.6)" class="color-btn w-6 h-6 rounded-full bg-green-500 border-2 border-transparent focus:border-white"></button>
+                    <button data-color="rgba(0, 150, 255, 0.6)" class="color-btn w-6 h-6 rounded-full bg-blue-500 border-2 border-transparent focus:border-white"></button>
+                    <button data-color="rgba(255, 255, 255, 0.6)" class="color-btn w-6 h-6 rounded-full bg-white border-2 border-neutral-400 focus:border-green-500"></button>
+                    <button data-color="rgba(0, 0, 0, 0.6)" class="color-btn w-6 h-6 rounded-full bg-black border-2 border-neutral-600 focus:border-white"></button>
+                </div>
+            </div>
+
+            <!-- เปิด/ปิด Grid -->
+            <label class="flex items-center gap-2 cursor-pointer mt-2">
+                <input type="checkbox" id="show-grid-checkbox" checked class="w-4 h-4 rounded text-green-500 bg-neutral-800 border-neutral-600 focus:ring-green-500 focus:ring-offset-neutral-800" />
+                <span class="text-sm">แสดงเส้นตาราง</span>
+            </label>
+        </div>
+
+        <!-- สรุปข้อมูล (ตอนแรกซ่อนไว้ จะโชว์เมื่ออัปโหลดรูป) -->
+        <div id="summary-container" class="bg-neutral-800 p-4 border border-green-500/30 rounded-xl mt-auto hidden">
+            <p class="text-xs text-neutral-400 mb-1">ถ้าสร้างในเกม คุณจะต้องใช้พื้นที่:</p>
+            <p id="blocks-width" class="text-sm font-bold text-green-400">กว้าง 0 บล็อก</p>
+            <p id="blocks-height" class="text-sm font-bold text-green-400">สูง 0 บล็อก</p>
+        </div>
     </div>
-  );
-}
+
+    <!-- พื้นที่แสดงผล (Canvas Workspace) -->
+    <div class="flex-1 bg-neutral-900 overflow-auto relative flex items-center justify-center p-8 pattern-checkered">
+        
+        <!-- กรณีมีรูปภาพแล้ว -->
+        <div id="canvas-container" class="shadow-2xl border border-neutral-700 bg-black/50 overflow-hidden relative hidden">
+            <canvas id="main-canvas" class="block cursor-crosshair"></canvas>
+        </div>
+
+        <!-- กรณีรออัปโหลดรูแ -->
+        <div id="empty-state" class="text-center text-neutral-500 flex flex-col items-center">
+            <i data-feather="image" class="w-16 h-16 mb-4 opacity-50"></i>
+            <p class="text-lg font-medium">รอรูปภาพของคุณอยู่</p>
+            <p class="text-sm mt-1">กดปุ่ม "เลือกรูปภาพ" ด้านซ้ายเพื่อเริ่มต้น</p>
+        </div>
+    </div>
+
+    <script>
+        // เรียกใช้งาน Feather Icons
+        feather.replace();
+
+        // --- ตัวแปรสำหรับเก็บสถานะต่างๆ (State) ---
+        let currentImage = null;
+        let imgWidth = 0;
+        let imgHeight = 0;
+        let zoom = 20;
+        let gridSize = 1;
+        let showGrid = true;
+        let gridColor = 'rgba(255, 0, 0, 0.6)'; // เริ่มต้นสีแดง
+
+        // --- ดึง Element จาก HTML มาเตรียมไว้ ---
+        const fileUpload = document.getElementById('file-upload');
+        const zoomRange = document.getElementById('zoom-range');
+        const gridRange = document.getElementById('grid-range');
+        const showGridCheckbox = document.getElementById('show-grid-checkbox');
+        const colorButtons = document.querySelectorAll('.color-btn');
+        
+        const canvas = document.getElementById('main-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- ฟังก์ชัน 1: จัดการเมื่อมีการเลือกไฟล์ภาพ ---
+        fileUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    currentImage = img;
+                    imgWidth = img.width;
+                    imgHeight = img.height;
+
+                    // ปรับซูมอัตโนมัติ ถ้าภาพใหญ่มากให้ซูมน้อยลง
+                    zoom = imgWidth > 100 ? 5 : 20;
+                    zoomRange.value = zoom;
+                    document.getElementById('zoom-val').innerText = zoom + 'x';
+
+                    // แสดงข้อมูลต้นฉบับ
+                    document.getElementById('orig-size').innerText = `${imgWidth} x ${imgHeight} px`;
+                    
+                    // สลับ UI จากหน้าว่างๆ ไปหน้า Canvas
+                    document.getElementById('empty-state').classList.add('hidden');
+                    document.getElementById('canvas-container').classList.remove('hidden');
+                    document.getElementById('image-info-container').classList.remove('hidden');
+                    document.getElementById('summary-container').classList.remove('hidden');
+
+                    updateSummary();
+                    drawCanvas();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // --- ฟังก์ชัน 2: วาดภาพและตารางลงบน Canvas ---
+        function drawCanvas() {
+            if (!currentImage) return;
+
+            const drawWidth = imgWidth * zoom;
+            const drawHeight = imgHeight * zoom;
+
+            // กำหนดขนาดหน้ากระดาษตามที่เราซูม
+            canvas.width = drawWidth;
+            canvas.height = drawHeight;
+
+            // ล้างหน้ากระดาษ
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // ปิดระบบลบรอยหยัก ทำให้รูป Pixel ไม่เบลอเวลาขยาย
+            ctx.imageSmoothingEnabled = false;
+
+            // วาดรูปภาพ
+            ctx.drawImage(currentImage, 0, 0, drawWidth, drawHeight);
+
+            // วาดเส้นตาราง
+            if (showGrid && gridSize > 0) {
+                ctx.strokeStyle = gridColor;
+                ctx.lineWidth = zoom > 10 ? 1 : 0.5; // เส้นบางลงถ้าซูมน้อย
+
+                const step = gridSize * zoom;
+
+                ctx.beginPath();
+                
+                // เส้นแนวตั้ง
+                for (let x = 0; x <= drawWidth; x += step) {
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, drawHeight);
+                }
+                
+                // เส้นแนวนอน
+                for (let y = 0; y <= drawHeight; y += step) {
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(drawWidth, y);
+                }
+                
+                ctx.stroke();
+            }
+        }
+
+        // --- ฟังก์ชัน 3: อัปเดตข้อความสรุปจำนวนบล็อก ---
+        function updateSummary() {
+            if (!currentImage) return;
+            const blocksW = Math.ceil(imgWidth / gridSize);
+            const blocksH = Math.ceil(imgHeight / gridSize);
+            document.getElementById('blocks-width').innerText = `กว้าง ${blocksW} บล็อก`;
+            document.getElementById('blocks-height').innerText = `สูง ${blocksH} บล็อก`;
+        }
+
+        // --- Event Listeners สำหรับ UI ควบคุมต่างๆ ---
+        
+        // เมื่อเลื่อนปรับ Zoom
+        zoomRange.addEventListener('input', (e) => {
+            zoom = Number(e.target.value);
+            document.getElementById('zoom-val').innerText = zoom + 'x';
+            drawCanvas();
+        });
+
+        // เมื่อเลื่อนปรับขนาด Grid
+        gridRange.addEventListener('input', (e) => {
+            gridSize = Number(e.target.value);
+            document.getElementById('grid-val').innerText = gridSize + ' px';
+            updateSummary();
+            drawCanvas();
+        });
+
+        // เมื่อติ๊กเปิด/ปิดตาราง
+        showGridCheckbox.addEventListener('change', (e) => {
+            showGrid = e.target.checked;
+            drawCanvas();
+        });
+
+        // เมื่อคลิกเลือกสีตาราง
+        colorButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // เปลี่ยนสีในตัวแปร
+                gridColor = e.target.getAttribute('data-color');
+                
+                // อัปเดต UI ปุ่มสี (ใส่กรอบให้ปุ่มที่ถูกเลือก)
+                colorButtons.forEach(b => {
+                    b.classList.remove('ring-2', 'ring-white', 'ring-offset-2', 'ring-offset-neutral-800');
+                });
+                e.target.classList.add('ring-2', 'ring-white', 'ring-offset-2', 'ring-offset-neutral-800');
+                
+                drawCanvas();
+            });
+        });
+
+    </script>
+</body>
+</html>
